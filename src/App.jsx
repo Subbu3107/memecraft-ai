@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 // Local:      "http://127.0.0.1:8000"
 // Production: "https://your-backend.onrender.com"
 // ─────────────────────────────────────────
-const API = "http://127.0.0.1:8000";
+const API = "https://memecraft-backend-4pj7.onrender.com";
 
 const LANGUAGES = [
   { code: "en", name: "English",    flag: "🇺🇸" },
