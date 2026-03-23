@@ -80,7 +80,7 @@ export default function MemeGenerator() {
         img.onload = resolve;
         img.onerror = reject;
         // Use a CORS proxy to load imgflip images
-        img.src = `https://corsproxy.io/?${encodeURIComponent(selected.url)}`;
+	img.src = `${API}/api/proxy-image?url=${encodeURIComponent(selected.url)}`;
       });
 
       canvas.width  = img.width;
