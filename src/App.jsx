@@ -1,10 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
-// ─────────────────────────────────────────
-// 🔧 CONFIG — change this one line to deploy
-// Local:      "http://127.0.0.1:8000"
-// Production: "https://your-backend.onrender.com"
-// ─────────────────────────────────────────
 const API = "https://memecraft-backend-4pj7.onrender.com";
 
 const LANGUAGES = [
@@ -59,7 +54,9 @@ export default function MemeGenerator() {
   const [copied, setCopied]         = useState(false);
   const [newTag, setNewTag]         = useState("");
   const [status, setStatus]         = useState("checking");
+  const [downloading, setDownloading] = useState(false);
 
+  const memeImgRef = useRef(null);
   const langName = LANGUAGES.find(l => l.code === language)?.name || "English";
 
   useEffect(() => {
@@ -68,6 +65,102 @@ export default function MemeGenerator() {
       .then(d => { if (d.templates?.length) setAll(d.templates); setStatus("online"); })
       .catch(() => setStatus("offline"));
   }, []);
+
+  // ── Canvas Download ──────────────────────────────────────
+  const downloadMeme = async () => {
+    if (!selected) return;
+    setDownloading(true);
+
+    try {
+      const canvas = document.createElement("canvas");
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        // Use a CORS proxy to load imgflip images
+        img.src = `https://corsproxy.io/?${encodeURIComponent(selected.url)}`;
+      });
+
+      canvas.width  = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+
+      // Draw base image
+      ctx.drawImage(img, 0, 0);
+
+      // Meme text style
+      const fontSize = Math.max(28, Math.floor(img.width / 12));
+      ctx.font         = `900 ${fontSize}px Impact, Arial Black, sans-serif`;
+      ctx.fillStyle    = "white";
+      ctx.strokeStyle  = "black";
+      ctx.lineWidth    = fontSize / 8;
+      ctx.textAlign    = "center";
+      ctx.lineJoin     = "round";
+
+      const drawText = (text, x, y) => {
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
+      };
+
+      const cx = canvas.width / 2;
+
+      // Top text
+      if (topText) {
+        const words = topText.toUpperCase().split(" ");
+        let line = "";
+        let lines = [];
+        const maxW = canvas.width - 40;
+
+        for (let w of words) {
+          const test = line ? `${line} ${w}` : w;
+          if (ctx.measureText(test).width > maxW && line) {
+            lines.push(line);
+            line = w;
+          } else {
+            line = test;
+          }
+        }
+        lines.push(line);
+        lines.forEach((l, i) => drawText(l, cx, fontSize * 1.1 + i * (fontSize + 6)));
+      }
+
+      // Bottom text
+      if (bottomText) {
+        const words = bottomText.toUpperCase().split(" ");
+        let line = "";
+        let lines = [];
+        const maxW = canvas.width - 40;
+
+        for (let w of words) {
+          const test = line ? `${line} ${w}` : w;
+          if (ctx.measureText(test).width > maxW && line) {
+            lines.push(line);
+            line = w;
+          } else {
+            line = test;
+          }
+        }
+        lines.push(line);
+        const startY = canvas.height - (lines.length * (fontSize + 6)) - 10;
+        lines.forEach((l, i) => drawText(l, cx, startY + i * (fontSize + 6)));
+      }
+
+      // Download
+      const link = document.createElement("a");
+      link.download = `memecraft-${Date.now()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      // Fallback — open image in new tab if CORS fails
+      window.open(selected.url, "_blank");
+      alert("Tip: Long press the image → Save to download it 📱");
+    }
+
+    setDownloading(false);
+  };
+  // ────────────────────────────────────────────────────────
 
   const generate = async () => {
     if (!prompt.trim()) return;
@@ -108,10 +201,10 @@ export default function MemeGenerator() {
       setCaption(`${prompt} — the struggle is real 😭✨`);
       setHashtags(["memes","funny","viral","relatable","lol","trending","memesdaily","humor","comedy","funnymemes"]);
       setImprovements([
-        "Make sure backend is running: python main.py",
+        "Make sure backend is running",
         "Check your GROQ_API_KEY in .env",
-        "Test backend: http://127.0.0.1:8000",
         "Try a more specific prompt",
+        "Restart with: python main.py",
       ]);
       setStage("results");
     }
@@ -125,7 +218,7 @@ export default function MemeGenerator() {
         body: JSON.stringify({ prompt, language: langName }),
       });
       const d = await r.json();
-      if (d.caption) setCaption(d.caption);
+      if (d.caption)  setCaption(d.caption);
       if (d.hashtags) setHashtags(d.hashtags);
     } catch {}
   };
@@ -152,6 +245,7 @@ export default function MemeGenerator() {
         @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
         @keyframes glow{0%,100%{box-shadow:0 0 20px rgba(255,209,0,.2)}50%{box-shadow:0 0 40px rgba(255,209,0,.5)}}
         @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+        @keyframes dlpulse{0%,100%{box-shadow:0 0 0 rgba(74,222,128,0)}50%{box-shadow:0 0 20px rgba(74,222,128,.4)}}
         .fade-up{animation:fadeUp .4s ease forwards}
         .mw{position:relative}
         .mt{position:absolute;left:0;right:0;font-family:Impact,'Arial Black',sans-serif;font-weight:900;text-transform:uppercase;color:#fff;text-align:center;padding:6px 10px;line-height:1.1;word-break:break-word;-webkit-text-stroke:2px black;text-shadow:2px 2px 0 #000,-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000}
@@ -164,6 +258,9 @@ export default function MemeGenerator() {
         .btn-y:disabled{opacity:.3;cursor:not-allowed;transform:none}
         .btn-g{background:transparent;color:#888;border:1px solid #2A2A2A;cursor:pointer;border-radius:8px;transition:all .15s;font-family:inherit}
         .btn-g:hover{border-color:#FF2D78;color:#FF2D78}
+        .btn-dl{background:#4ADE80;color:#000;font-weight:800;border:none;cursor:pointer;border-radius:10px;transition:all .15s;font-family:inherit;animation:dlpulse 2s infinite}
+        .btn-dl:hover{background:#22c55e;transform:translateY(-1px)}
+        .btn-dl:disabled{opacity:.5;cursor:not-allowed;animation:none}
         input,textarea{background:#151515;border:1px solid #2A2A2A;color:#fff;border-radius:8px;outline:none;font-family:inherit;width:100%}
         input:focus,textarea:focus{border-color:#FFD100}
         input::placeholder,textarea::placeholder{color:#444}
@@ -182,7 +279,7 @@ export default function MemeGenerator() {
           {status==="online"?"Backend live":status==="offline"?"Backend offline":"Connecting..."}
         </span>
         {stage!=="input" && <button className="btn-g" style={{marginLeft:"auto",padding:"8px 16px",fontSize:13}} onClick={reset}>+ New Meme</button>}
-        {stage==="input" && <span style={{marginLeft:"auto",fontSize:11,color:"#333",letterSpacing:1}}>{API.includes("127")?"⚡ LOCAL":"🌐 PROD"}</span>}
+        {stage==="input" && <span style={{marginLeft:"auto",fontSize:11,color:"#333",letterSpacing:1}}>🌐 PROD</span>}
       </div>
 
       {/* INPUT */}
@@ -249,9 +346,9 @@ export default function MemeGenerator() {
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:32,flexWrap:"wrap",gap:12,alignItems:"flex-start"}}>
             <div>
               <h2 style={{fontFamily:"'Bebas Neue',cursive",fontSize:"clamp(28px,5vw,44px)",margin:0,letterSpacing:2}}>
-                AI PICKED THESE <span style={{color:"#FFD100"}}>4 TEMPLATES</span>
+                AI PICKED <span style={{color:"#FFD100"}}>4 TEMPLATES</span>
               </h2>
-              <p style={{color:"#555",margin:"8px 0 0",fontSize:14}}>👆 Click any to customize</p>
+              <p style={{color:"#555",margin:"8px 0 0",fontSize:14}}>👆 Click any to customize + download</p>
             </div>
             <button className="btn-g" onClick={()=>setStage("input")} style={{padding:"10px 20px",fontSize:13}}>← Change Prompt</button>
           </div>
@@ -322,12 +419,21 @@ export default function MemeGenerator() {
             {/* LEFT */}
             <div>
               <div className="mw" style={{borderRadius:12,overflow:"hidden",background:"#000",boxShadow:"0 20px 60px rgba(0,0,0,.6)"}}>
-                <img src={selected.url} alt={selected.name} style={{width:"100%",display:"block"}}/>
+                <img ref={memeImgRef} src={selected.url} alt={selected.name} style={{width:"100%",display:"block"}} crossOrigin="anonymous"/>
                 {topText    && <div className="mt mt-top" style={{fontSize:"clamp(15px,3.5vw,30px)"}}>{topText}</div>}
                 {bottomText && <div className="mt mt-bot" style={{fontSize:"clamp(15px,3.5vw,30px)"}}>{bottomText}</div>}
               </div>
-              <p style={{fontSize:11,color:"#444",textAlign:"center",marginTop:10}}>📸 Screenshot to save</p>
-              <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:20}}>
+
+              {/* ── DOWNLOAD BUTTON ── */}
+              <button className="btn-dl" onClick={downloadMeme} disabled={downloading}
+                style={{width:"100%",padding:"14px",marginTop:14,fontSize:16,borderRadius:12,letterSpacing:1}}>
+                {downloading ? "⏳ Generating PNG..." : "⬇️ DOWNLOAD MEME (PNG)"}
+              </button>
+              <p style={{fontSize:11,color:"#444",textAlign:"center",marginTop:8}}>
+                Downloads as high-quality PNG · No watermark · Free
+              </p>
+
+              <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:16}}>
                 <div>
                   <label style={{fontSize:11,color:"#555",letterSpacing:2,textTransform:"uppercase"}}>Top Text</label>
                   <input value={topText} onChange={e=>setTopText(e.target.value)} placeholder="Top text..." style={{padding:"10px 14px",marginTop:6,fontSize:14}}/>
@@ -411,18 +517,6 @@ export default function MemeGenerator() {
                 <button className="btn-y" onClick={copyAll} style={{width:"100%",padding:"13px",marginTop:16,fontSize:15,borderRadius:10}}>
                   {copied?"✅ Copied!":"📋 Copy Caption + Hashtags"}
                 </button>
-
-                <div style={{marginTop:12,padding:"12px 14px",background:"#0A0A0A",borderRadius:8,border:"1px solid #1E1E1E"}}>
-                  <p style={{margin:0,fontSize:12,color:"#444",lineHeight:1.7}}>
-                    <span style={{color:"#FFD100"}}>📱 Post to Instagram:</span><br/>
-                    1. Screenshot meme above<br/>
-                    2. Instagram → Create Post<br/>
-                    3. Paste copied caption + hashtags
-                  </p>
-                  <p style={{margin:"8px 0 0",fontSize:11,color:"#333"}}>
-                    To switch to production: change <code style={{color:"#FFD100"}}>API</code> on line 8
-                  </p>
-                </div>
               </div>
             </div>
           </div>
