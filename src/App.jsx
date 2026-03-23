@@ -67,99 +67,78 @@ export default function MemeGenerator() {
   }, []);
 
   // ── Canvas Download ──────────────────────────────────────
-  const downloadMeme = async () => {
-    if (!selected) return;
-    setDownloading(true);
+ const downloadMeme = async () => {
+  if (!selected) return;
+  setDownloading(true);
+  try {
+    // Fetch image as blob through our backend proxy
+    const res = await fetch(`${API}/api/proxy-image?url=${encodeURIComponent(selected.url)}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
 
-    try {
-      const canvas = document.createElement("canvas");
-      const img = new Image();
-      img.crossOrigin = "anonymous";
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = blobUrl;
+    });
 
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        // Use a CORS proxy to load imgflip images
-	img.src = `${API}/api/proxy-image?url=${encodeURIComponent(selected.url)}`;
-      });
+    const canvas = document.createElement("canvas");
+    canvas.width  = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
 
-      canvas.width  = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
+    const fontSize = Math.max(28, Math.floor(img.width / 12));
+    ctx.font        = `900 ${fontSize}px Impact, Arial Black, sans-serif`;
+    ctx.fillStyle   = "white";
+    ctx.strokeStyle = "black";
+    ctx.lineWidth   = fontSize / 8;
+    ctx.textAlign   = "center";
+    ctx.lineJoin    = "round";
 
-      // Draw base image
-      ctx.drawImage(img, 0, 0);
+    const drawText = (text, x, y) => {
+      ctx.strokeText(text, x, y);
+      ctx.fillText(text, x, y);
+    };
 
-      // Meme text style
-      const fontSize = Math.max(28, Math.floor(img.width / 12));
-      ctx.font         = `900 ${fontSize}px Impact, Arial Black, sans-serif`;
-      ctx.fillStyle    = "white";
-      ctx.strokeStyle  = "black";
-      ctx.lineWidth    = fontSize / 8;
-      ctx.textAlign    = "center";
-      ctx.lineJoin     = "round";
-
-      const drawText = (text, x, y) => {
-        ctx.strokeText(text, x, y);
-        ctx.fillText(text, x, y);
-      };
-
-      const cx = canvas.width / 2;
-
-      // Top text
-      if (topText) {
-        const words = topText.toUpperCase().split(" ");
-        let line = "";
-        let lines = [];
-        const maxW = canvas.width - 40;
-
-        for (let w of words) {
-          const test = line ? `${line} ${w}` : w;
-          if (ctx.measureText(test).width > maxW && line) {
-            lines.push(line);
-            line = w;
-          } else {
-            line = test;
-          }
-        }
-        lines.push(line);
-        lines.forEach((l, i) => drawText(l, cx, fontSize * 1.1 + i * (fontSize + 6)));
+    const wrapText = (text, maxW) => {
+      const words = text.toUpperCase().split(" ");
+      let lines = [], line = "";
+      for (let w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (ctx.measureText(test).width > maxW && line) {
+          lines.push(line); line = w;
+        } else line = test;
       }
+      lines.push(line);
+      return lines;
+    };
 
-      // Bottom text
-      if (bottomText) {
-        const words = bottomText.toUpperCase().split(" ");
-        let line = "";
-        let lines = [];
-        const maxW = canvas.width - 40;
+    const cx = canvas.width / 2;
+    const maxW = canvas.width - 40;
 
-        for (let w of words) {
-          const test = line ? `${line} ${w}` : w;
-          if (ctx.measureText(test).width > maxW && line) {
-            lines.push(line);
-            line = w;
-          } else {
-            line = test;
-          }
-        }
-        lines.push(line);
-        const startY = canvas.height - (lines.length * (fontSize + 6)) - 10;
-        lines.forEach((l, i) => drawText(l, cx, startY + i * (fontSize + 6)));
-      }
-
-      // Download
-      const link = document.createElement("a");
-      link.download = `memecraft-${Date.now()}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    } catch (err) {
-      // Fallback — open image in new tab if CORS fails
-      window.open(selected.url, "_blank");
-      alert("Tip: Long press the image → Save to download it 📱");
+    if (topText) {
+      const lines = wrapText(topText, maxW);
+      lines.forEach((l, i) => drawText(l, cx, fontSize * 1.1 + i * (fontSize + 6)));
+    }
+    if (bottomText) {
+      const lines = wrapText(bottomText, maxW);
+      const startY = canvas.height - (lines.length * (fontSize + 6)) - 10;
+      lines.forEach((l, i) => drawText(l, cx, startY + i * (fontSize + 6)));
     }
 
-    setDownloading(false);
-  };
+    URL.revokeObjectURL(blobUrl);
+
+    const link = document.createElement("a");
+    link.download = `memecraft-${Date.now()}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  } catch (err) {
+    alert("Download failed. Try: long press the meme image → Save image 📱");
+  }
+  setDownloading(false);
+};
   // ────────────────────────────────────────────────────────
 
   const generate = async () => {
